@@ -1,0 +1,26 @@
+{
+  "name": "vitepress-tech-blog",
+  "version": "1.0.0",
+  "description": "个人技术博客",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev docs",
+    "build": "vitepress build docs",
+    "preview": "vitepress preview docs",
+    "clean": "rimraf docs/.vitepress/dist"
+  },
+  "dependencies": {
+    "vue": "^3.4.15",
+    "vitepress": "^1.0.0-rc.40",
+    "pinia": "^2.1.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.16",
+    "typescript": "^5.3.3",
+    "rimraf": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 

@@ -1,0 +1,61 @@
+:root {
+  --vp-c-brand: #3eaf7c;
+  --vp-c-brand-light: #4abf8a;
+  --vp-c-brand-dark: #2c8f6d;
+  
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: -webkit-linear-gradient(120deg, #3eaf7c, #41d1ff);
+}
+
+/* Markdown 样式增强 */
+.vp-doc h1 {
+  font-size: 32px;
+  margin-bottom: 1.5em;
+}
+
+.vp-doc h2 {
+  border-top: none;
+  margin-top: 2em;
+}
+
+/* 自定义容器样式 */
+.custom-block {
+  padding: 16px;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+.custom-block.tip {
+  background-color: var(--vp-c-bg-soft);
+  border-color: var(--vp-c-brand);
+}
+
+.custom-block.warning {
+  border-color: #e7c000;
+}
+
+.custom-block.danger {
+  border-color: #cc0000;
+}
+
+/* 表格样式 */
+.vp-doc table {
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.vp-doc tr:nth-child(2n) {
+  background-color: var(--vp-c-bg-soft);
+}
+
+/* 图片样式 */
+.vp-doc img {
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Badge 样式 */
+.vp-doc .badge {
+  margin-left: 8px;
+} 
