@@ -5,11 +5,8 @@ description: 分享前端开发技术和经验
 
 hero:
   name: 前端技术博客
-  text: 探索前端技术的无限可能
+  text: 前端面试基础知识
   tagline: Vue.js、JavaScript、前端工程化
-  image:
-    src: /logo.png
-    alt: 博客Logo
   actions:
     - theme: brand
       text: 开始阅读 →
