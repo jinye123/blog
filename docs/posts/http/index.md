@@ -1,262 +1,371 @@
-# 计算机网络面试题
+---
+title: 计算机网络
+description: TCP / HTTP / HTTPS / WebSocket / SSE 高频考点
+---
 
-## 技术蛋老师的计算机网络课程
-- https://space.bilibili.com/327247876/lists?sid=60187&spm_id_from=333.788.0.0
+# 计算机网络
 
-## 计算机网络模型的分层
+## OSI 七层模型 vs TCP/IP 四层
 
-1. 物理层
-2. 链路层
-3. 网络层
-4. 传输层 定义了数据是以什么方式进行传输以及传输到的应用端口，是传输方式和端到端的链接，真正的传输还是需要网线。
-5. 会话层
-6. 表示层
-7. 应用层
+| OSI | TCP/IP | 例子 |
+| --- | --- | --- |
+| 应用层 | 应用层 | HTTP / DNS / FTP / SSH |
+| 表示层 | - | - |
+| 会话层 | - | - |
+| 传输层 | 传输层 | TCP / UDP |
+| 网络层 | 网络层 | IP / ICMP |
+| 数据链路层 | 网络接口层 | 以太网 / WiFi |
+| 物理层 | - | 网线 / 光纤 |
 
+## TCP 三次握手
 
-## 计算机的三次握手四次挥手
+```
+客户端                      服务器
+  | --- SYN(seq=x) --->     |   SYN_SENT
+  |                          |
+  | <-- SYN+ACK(seq=y,ack=x+1) -- |  SYN_RCVD
+  |                          |
+  | --- ACK(ack=y+1) -->     |  ESTABLISHED
+```
 
-### TCP
+**为什么三次**：
+- 一次不够：服务器不知道客户端能收
+- 两次不够：服务器不能确认客户端能收（"已失效的旧 SYN 突然到达"会导致服务器单方面建连接，资源浪费）
+- 三次刚好：双方都确认对方的收发能力
 
-三次握手过程：
-1. SYN：客户端发送SYN报文（序列号x），进入SYN_SENT状态。
-2. SYN-ACK：服务器回复SYN（序列号y）+ ACK（x+1），进入SYN_RCVD状态。
-3. ACK：客户端发送ACK（y+1），双方进入ESTABLISHED状态。
+## TCP 四次挥手
 
-为什么三次：
-确保双方收发能力正常。两次无法防止已失效的SYN请求突然到达服务器（导致资源浪费）
+```
+主动方                       被动方
+  | --- FIN --->              |   FIN_WAIT_1
+  | <-- ACK ---              |   CLOSE_WAIT（仍可发数据）
+  | <-- FIN ---              |   LAST_ACK
+  | --- ACK --->              |   TIME_WAIT（等 2MSL）
+                                CLOSED
+```
 
-四次挥手过程：
-1. FIN：主动关闭方发送FIN报文，进入FIN_WAIT_1状态。
-2. ACK：被动关闭方回复ACK，进入CLOSE_WAIT状态（此时仍可发送数据）。
-3. FIN：被动关闭方处理完数据后发送FIN，进入LAST_ACK状态。
-4. ACK：主动关闭方回复ACK，进入TIME_WAIT状态（等待2MSL后关闭）。
+**为什么四次**：
+- TCP 是全双工，关闭分两个方向
+- 被动方收到 FIN 只能马上 ACK，但还有数据要发；发完才发 FIN
 
-为什么四次：
-TCP是全双工的，需双方独立关闭发送和接收通道,同时确保被动方有消息没有发送！！！。
+**TIME_WAIT 为什么等 2MSL**：
+- 确保最后 ACK 能被对方收到（丢失对方会重发 FIN）
+- 让旧报文消失，避免与新连接冲突
 
-TCP如何保证可靠传输？
-- 确认应答（ACK）：接收方确认收到的数据。
-- 超时重传：未收到ACK则重发数据。
-- 序列号：按序重组数据，避免乱序。
-- 流量控制：滑动窗口机制，防止接收方缓冲区溢出。
-- 拥塞控制：慢启动、拥塞避免、快重传、快恢复。
+## TCP 可靠性
 
-TIME_WAIT状态的作用？为什么等待2MSL？
+| 机制 | 作用 |
+| --- | --- |
+| 序号 / 确认号 | 顺序、丢失检测 |
+| 超时重传 | 没 ACK 就重发 |
+| 滑动窗口 | 流量控制（接收方能力） |
+| 拥塞控制 | 网络能力（慢启动 / 拥塞避免 / 快重传 / 快恢复） |
+| 校验和 | 数据完整性 |
 
-- 确保最后一个ACK能被对方接收（若丢失，对方会重发FIN）。
-- 让旧连接的报文在网络中消失，避免与新连接冲突。
+流量 vs 拥塞：
+- **流量控制**：基于接收方缓冲区（窗口大小）
+- **拥塞控制**：基于网络状况（拥塞窗口 cwnd）
 
-TCP的流量控制与拥塞控制的区别？
+## UDP
 
-- 流量控制：基于接收方能力（通过滑动窗口大小）。
-- 拥塞控制：基于网络状况（通过慢启动阈值和拥塞窗口调整）。
+特点：无连接、不可靠、头部 8 字节、无流控拥塞。
 
-### UDP
+适用：
+- 实时音视频
+- DNS
+- 广播 / 多播
+- 游戏
 
-特点：无连接、不可靠、头部小（8字节）、无流量和拥塞控制。
+可靠 UDP：QUIC（HTTP/3 底层）、KCP、WebRTC。
 
-适用场景：
+## GET vs POST
 
-- 实时应用（视频通话、直播）。
-- DNS查询、广播/多播通信。
-- 对丢包不敏感但要求低延迟的场景。
+| 维度 | GET | POST |
+| --- | --- | --- |
+| 语义 | 获取 | 提交 |
+| 参数 | URL（可见） | body |
+| 长度 | URL 限制（约 2KB） | 无规范限制（看服务器） |
+| 缓存 | 可缓存 | 默认不缓存 |
+| 书签 | 可 | 不可 |
+| 历史 | 保留 | 不保留 |
+| 编码 | URL 编码 | 多种（form / json / multipart） |
+| 安全 | 暴露 URL，参数在日志中 | body 相对安全（仍需 HTTPS） |
+| 幂等 | 是 | 否 |
+| 是否能发 body | 协议允许，但语义不推荐 | 是 |
 
-UDP如何实现可靠传输？
-1. 在应用层添加重传机制、确认应答、序列号等（如QUIC协议）。
-2. 例如：KCP（快速可靠UDP协议）、WebRTC部分实现。
+注意：所谓"安全"指 HTTP 语义层，HTTPS 下 body 与 URL 都加密。GET 真正的"不安全"是 URL 容易被日志、Referer 泄露。
 
-TCP与UDP对比
-特性	    TCP	                    UDP
-连接方式	面向连接（三次握手）	    无连接
-可靠性	可靠（确认、重传、有序）	不可靠
-传输效率	低（头部20字节，机制复杂）	高（头部8字节，无控制）
-流量控制	滑动窗口	                无
-拥塞控制	慢启动、拥塞避免等	        无
-适用场景	文件传输、HTTP、邮件	    实时音视频、DNS、广播
+## 常见状态码
 
-- tcp会对数据分片字节流，让然后按照索引传输 但是增大开销 
+| 码 | 含义 |
+| --- | --- |
+| 200 | OK |
+| 201 | Created（POST 新建成功） |
+| 204 | No Content |
+| 206 | Partial Content（断点续传） |
+| 301 | 永久重定向 |
+| 302 | 临时重定向（语义不清晰，多用 307/308） |
+| 304 | Not Modified（协商缓存命中） |
+| 400 | Bad Request |
+| 401 | Unauthorized（未登录） |
+| 403 | Forbidden（已登录但无权限） |
+| 404 | Not Found |
+| 405 | Method Not Allowed |
+| 408 | Request Timeout |
+| 413 | Payload Too Large |
+| 429 | Too Many Requests（限流） |
+| 500 | Internal Server Error |
+| 502 | Bad Gateway（网关错误） |
+| 503 | Service Unavailable |
+| 504 | Gateway Timeout |
 
+## HTTP 缓存（必考）
 
-## GET和POST的区别？ 
-关于http本身作为浏览器和服务器的传输协议有post和get后来被广泛运用到了ajax接口上面，参数可以放在body或者query都可以但是过度的开放降低了效率所以开发者有规范 post body gey query
-因为浏览器关于url的长度做了限制 以及服务端解析协议的内存大小 所以限制url参数的长度大小
-对于网络安全而言http就是明文协议 没有安全 只是body对比query来讲相对更安全  
+```
+请求 → 强缓存？
+        ↓ 命中
+       200 from cache (memory/disk)
+        ↓ 未命中
+       带 If-None-Match / If-Modified-Since 请求
+        ↓
+       服务器对比
+        ↓ 资源未变
+       304 Not Modified
+        ↓ 资源变了
+       200 + 新内容
+```
 
-1. 安全性：GET参数暴露在URL中，POST参数在请求体中。
-2. 用途性：GET更适合在在获取资源，POST更适合去做数据的提交。
-3. 数据长度：GET受URL长度限制（约2KB），POST支持大数据传输。
-4. 缓存：GET可被缓存，POST默认不缓存。
-5. 书签：get可收藏为书签，post不可以
-6. 编码类型：get为application/x-www-form-urlencode post为多种编码类型
-7. 历史：get会保留在历史中，post不会保留在历史中
-8. 数据类型：get为ascii码，post没有限制
+### 强缓存
 
-## 常见HTTP状态码
-- 200 OK：请求成功。
-- 301 Moved Permanently：永久重定向（浏览器缓存新地址）。
-- 304 Not Modified：资源未修改（协商缓存生效）。
-- 404 Not Found：资源不存在。
-- 500 Internal Server Error：服务器内部错误。
+- `Cache-Control: max-age=31536000`（最高优先级）
+- `Cache-Control: no-cache`：跳过强缓存，走协商
+- `Cache-Control: no-store`：不缓存
+- `Cache-Control: public / private`
+- `Cache-Control: immutable`：永不变（带 hash 的静态资源）
+- `Expires`（HTTP/1.0 老字段）
 
-## HTTP缓存机制
-1. 强缓存：直接使用本地副本，通过Cache-Control（优先级高）和Expires头控制。
+### 协商缓存
 
-2. 协商缓存：询问服务器资源是否更新，通过ETag（哈希值）和Last-Modified（时间戳）验证。
+- `ETag` ↔ `If-None-Match`：内容哈希（精确）
+- `Last-Modified` ↔ `If-Modified-Since`：时间（秒精度，弱）
 
-3. 流程：强缓存失效 → 发送请求带If-None-Match/If-Modified-Since → 服务器返回304或200。
+实战策略：
 
+| 资源 | 策略 |
+| --- | --- |
+| HTML | `Cache-Control: no-cache`（必须走协商，否则更新拿不到） |
+| 带 hash 的 JS/CSS | `Cache-Control: max-age=31536000, immutable` |
+| 图片 | 较长 max-age |
 
-## HTTP与HTTPS的区别
-1. 加密：HTTP明文传输，HTTPS通过SSL/TLS加密。
-2. 端口：HTTP默认80，HTTPS默认443。
-3. 证书：HTTPS需CA颁发的数字证书验证身份。
-4. 性能：HTTPS握手耗时略高（可通过会话恢复优化）。
+## HTTP/1.1 优化
 
-## HTTPS加密过程（TLS握手）
-1. Client Hello：客户端发送支持的加密算法和随机数。
-2. Server Hello：服务器选择算法，返回随机数和证书（含公钥）。
-3. 验证证书：客户端验证证书有效性（CA签发、域名匹配、未过期）。
-4. 生成密钥：客户端用公钥加密预主密钥发送，双方通过随机数生成会话密钥。
-5. 加密通信：后续数据使用对称加密（如AES）传输。
+- **Keep-Alive**：默认开启，TCP 复用
+- **管线化**：批量发请求（但响应必须按序，存在队头阻塞，实际很少启用）
 
-- 非对称加密：握手阶段交换密钥（RSA/ECC），安全但速度慢。
-- 对称加密：数据传输阶段使用（AES），高效快速。
-- 优势：结合两者安全性（密钥交换）与性能（数据传输）。
+## HTTP/2
 
+| 特性 | 含义 |
+| --- | --- |
+| 多路复用 | 一个 TCP 连接上并发多个请求，解决队头阻塞 |
+| 二进制分帧 | 用二进制帧替代文本，性能更好 |
+| 头部压缩 HPACK | 重复 header 字典压缩 |
+| 流优先级 | 客户端可指定优先级 |
+| 服务器推送 | Push 静态资源（已废弃，浏览器普遍不支持） |
 
-## HTTP进阶与优化
-1. HTTP/1.1的优化
-    - 持久连接：默认保持TCP连接复用（Connection: keep-alive）。
-    - 管线化：批量发送请求（但响应必须按顺序，存在队头阻塞）。
-2. HTTP/2核心特性
-    - 多路复用：一个连接并行处理多个请求，解决队头阻塞。
-    - 头部压缩：HPACK算法减少头部大小。
-    - 服务器推送：主动推送CSS/JS等资源，减少请求延迟。
-3. HTTP/3与QUIC协议
-    - 基于UDP：避免TCP队头阻塞，更快连接建立（0-RTT）。
-    - 内置加密：默认使用TLS 1.3，提升安全性
+注意：HTTP/2 队头阻塞仍存在于 TCP 层（一个包丢了整个连接卡住），HTTP/3 解决。
 
-## Keep-Alive与WebSocket的长连接有什么区别？
-1. Keep-Alive：仍是HTTP协议，每次请求需完整HTTP头部，服务器不能主动推送数据。
-2. WebSocket：基于HTTP协议升级的双向通信协议，支持服务器主动推送，连接可长期保持。
+## HTTP/3 + QUIC
 
+- 基于 **UDP**，避免 TCP 队头阻塞
+- 握手与 TLS 1.3 合并，**0-RTT** 重连
+- 内置加密
+- 连接迁移（手机切 WiFi 不断）
 
-## websocket相关
+## HTTPS
 
-websocket是双全工通信、长连接、通过http101协议升级、初始通信后小帧传输
+### HTTPS = HTTP + TLS
 
-### WebSocket的握手过程是怎样的？
-1. 客户端发起HTTP请求：通过 Upgrade 头声明协议升级
-   - Connection: Upgrade
-   - Upgrade: websocket
-   - Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
-2. 服务端响应协议升级：返回 HTTP 101 状态码。
-   - HTTP/1.1 101 Switching Protocols
-   - Upgrade: websocket
-   - Connection: Upgrade
-   - Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+- 端口 443
+- 数据加密（防窃听）
+- 完整性校验（防篡改）
+- 身份认证（防中间人）
 
-### WebSocket如何保持长连接？
+### TLS 握手（RSA 算法，简化）
 
-- 心跳机制：通过定时发送 Ping/Pong 帧检测连接活性。
-- 客户端或服务端发送 Ping 帧，对方需回复 Pong 帧。
-- 若未收到响应，可主动关闭连接。
+```
+1. Client Hello：客户端支持的算法、随机数 R1
+2. Server Hello：选定算法、随机数 R2、证书（含公钥）
+3. 客户端验证证书（CA / 域名 / 有效期 / 撤销列表）
+4. 客户端生成 pre-master，用公钥加密发给服务器
+5. 双方用 R1 + R2 + pre-master 算出会话密钥（对称密钥）
+6. 后续用对称加密通信（AES）
+```
 
-### 如何保证WebSocket通信的安全性？
+### ECDHE（现代主流）
 
-- 使用wss协议：基于 TLS 加密（类似 HTTPS）。
-- 验证Origin头：防止跨站WebSocket劫持（CSWSH）。
-- 限制连接频率：防止DDoS攻击。
+RSA 的问题：私钥泄露后历史流量也能解密（无前向保密）。
 
-### 如何处理WebSocket的异常断开？
+ECDHE 用临时密钥协商，每次会话密钥不一样，私钥泄露也无法解密历史流量。
 
-自动重连：在 onclose 事件中实现指数退避重连。
+### 非对称 vs 对称
+
+| 类型 | 速度 | 用途 |
+| --- | --- | --- |
+| 非对称（RSA / ECC） | 慢 | 握手阶段交换密钥、签名 |
+| 对称（AES / ChaCha20） | 快 | 数据传输 |
+
+HTTPS 的智慧：用非对称解决密钥分发，用对称完成大量数据加密。
+
+## HSTS
+
+服务端响应 `Strict-Transport-Security: max-age=31536000; includeSubDomains`，告诉浏览器后续必须走 HTTPS（防降级攻击）。
+
+## WebSocket
+
+### 特点
+- 全双工
+- 长连接
+- HTTP 101 协议升级
+- 文本 + 二进制
+- 较小开销（帧头 2-14 字节）
+
+### 握手
+
+```
+GET /chat HTTP/1.1
+Host: example.com
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: <base64>
+Sec-WebSocket-Version: 13
+
+HTTP/1.1 101 Switching Protocols
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: <key 处理后的值>
+```
+
+### 保活
+
 ```js
-let reconnectAttempts = 0;
-function reconnect() {
-  if (reconnectAttempts < 5) {
-    setTimeout(() => {
-      new WebSocket(url);
-      reconnectAttempts++;
-    }, 1000 * Math.pow(2, reconnectAttempts));
-  }
+let pingTimer;
+function startPing(ws) {
+  pingTimer = setInterval(() => {
+    if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ping' }));
+  }, 30000);
+}
+ws.onmessage = (e) => {
+  const data = JSON.parse(e.data);
+  if (data.type === 'pong') resetIdleTimer();
+};
+```
+
+### 重连（指数退避）
+
+```js
+let attempts = 0;
+function connect() {
+  const ws = new WebSocket(url);
+  ws.onopen = () => { attempts = 0; };
+  ws.onclose = () => {
+    if (attempts < 5) {
+      setTimeout(connect, 1000 * 2 ** attempts);
+      attempts++;
+    }
+  };
+  return ws;
 }
 ```
 
+### 安全
 
-## SSE
+- 用 `wss://`（TLS 加密）
+- 校验 `Origin` 头防 CSWSH
+- 限制连接频率、消息频率
+- 鉴权（建连前 token 校验）
 
-定义：SSE（Server-Sent Events）是一种基于 HTTP 的单向通信协议，允许服务器主动向客户端推送数据
-- 通信方向    单向（仅服务端→客户端）
-- 协议       基于 HTTP（长连接）
-- 数据格式	文本（text/event-stream）
-- 适用场景	实时通知、股票行情、日志推送
+## SSE（Server-Sent Events）
 
-### SSE如何建立连接？
+单向（服务端 → 客户端）的 HTTP 长连接。
 
-客户端：通过 EventSource API 发起请求：
 ```js
-const eventSource = new EventSource('/updates');
-eventSource.onmessage = (event) => {
-  console.log('收到消息:', event.data);
-};
+const es = new EventSource('/updates');
+es.onmessage = (e) => console.log(e.data);
+es.addEventListener('status', (e) => console.log('status', e.data));
 ```
-服务端：响应需包含以下头部：
-```text
+
+服务端响应：
+
+```
 HTTP/1.1 200 OK
 Content-Type: text/event-stream
 Cache-Control: no-cache
 Connection: keep-alive
+
+data: hello
+id: 1
+
+event: status
+data: {"online": true}
+id: 2
+retry: 5000
 ```
 
-### SSE的数据格式规范是什么？
+### vs WebSocket
 
-```text
-data: 第一条消息\n\n
-id: 123\n
-event: status\n
-data: {"time": "2023-10-01"}\n\n
+| 维度 | SSE | WebSocket |
+| --- | --- | --- |
+| 方向 | 单向 | 双向 |
+| 协议 | HTTP | 升级协议 |
+| 二进制 | 不支持 | 支持 |
+| 自动重连 | 内置 | 自己实现 |
+| 兼容 | IE 不支持 | 现代浏览器 |
+| 适用 | LLM 流式输出、通知、行情 | 聊天、协作 |
+
+## CORS 预检
+
+参见 [浏览器原理 - 跨域](../browser/index.md#cors-最常用)。
+
+## 其他常考
+
+### DNS 解析
+
 ```
-- data：消息内容（多行合并为单值，换行符保留）。
-- id：事件ID（断线重连时通过 Last-Event-ID 头恢复）。
-- event：自定义事件类型（默认触发 onmessage，指定类型触发对应事件）。
-- retry：重连时间（毫秒）。
-
-### 如何处理SSE的断线重连?
-
-- 客户端自动重连：EventSource 默认在连接断开后尝试重连
-- 自定义重试逻辑
-```js
-let eventSource;
-function connect() {
-  eventSource = new EventSource('/updates');
-  eventSource.onerror = () => {
-    eventSource.close();
-    setTimeout(connect, 5000); // 5秒后重连
-  };
-}
-connect();
+浏览器 DNS 缓存
+  → 系统缓存（hosts）
+  → 路由器缓存
+  → 运营商 DNS
+  → 根域名 → 顶级域 → 权威 DNS
 ```
 
-### SSE的优缺点是什么？
-优点：
-1. 简单易用（基于 HTTP，无需额外协议）。
-2. 自动重连机制（客户端内置）。
-3. 轻量级，适合文本数据推送。
+`dns-prefetch` 提前解析。
 
-缺点：
-1. 单向通信（无法客户端→服务端）。
-2. 不支持二进制数据。
-3. 浏览器兼容性限制（IE/Edge 旧版本不支持）
+### CDN 工作原理
 
+1. 用户请求资源域名
+2. 智能 DNS 返回最近的边缘节点 IP
+3. 边缘节点：命中缓存直接返回；未命中回源
+4. 源站返回 + CDN 缓存
 
-## CORS跨域请求的预检机制
+### 长轮询 / 短轮询 / WebSocket / SSE 对比
 
-1. 简单请求：GET/POST/HEAD，直接发送请求；
-2. 复杂请求（如PUT/DELETE）：先发送OPTIONS预检请求，检查服务器支持的请求方法和头信息
+| 方案 | 实时性 | 服务器开销 | 实现 |
+| --- | --- | --- | --- |
+| 短轮询 | 差 | 高（频繁请求） | setInterval + fetch |
+| 长轮询 | 中 | 中（连接保持） | 服务端挂起 + 超时再发 |
+| SSE | 好 | 低 | EventSource |
+| WebSocket | 极好 | 低 | new WebSocket |
 
+LLM 应用：基本都走 SSE 流式输出。
 
-## 资源预加载与懒加载
-1. 预加载：<link rel="preload">提前加载关键资源；
-2. 懒加载：延迟加载非视口内的图片或组件
+## 安全综合
+
+| 威胁 | 防御 |
+| --- | --- |
+| 窃听 | HTTPS |
+| 中间人 | HTTPS + HSTS + 证书校验 |
+| 重放 | 时间戳 + nonce + 签名 |
+| CSRF | SameSite cookie + token + Referer/Origin |
+| XSS | 输出转义 + CSP + HttpOnly |
+| 点击劫持 | `X-Frame-Options` / CSP frame-ancestors |
+| 暴力破解 | 限流 + 验证码 + 锁定 |

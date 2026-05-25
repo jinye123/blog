@@ -1,4 +1,9 @@
-# electron
+---
+title: Electron 面试题
+description: Electron 跨平台桌面开发核心面试题
+---
+
+# Electron
 
 ## 什么是 Electron?
 
@@ -30,7 +35,7 @@ Electron 应用通过使用相同的代码基础，结合 Node.js 的能力，�
 
 1. dom-ready dom已经完全加载和解析完毕 
 2. did-finish-load 页面的所有资源加载完毕
-3. crash 渲染然进程崩溃 触发这个事件
+3. crashed 渲染进程崩溃 触发这个事件
 4. unresponsive 渲染进程无响应
 
 ## 如何在 Electron 中实现主进程和渲染进程之间的通信？
@@ -135,7 +140,7 @@ app.on('ready', () => {
   mainWindow.loadFile('index.html');
 });
 ```
-- 使用contentBridge 可以安全地将 Node.js 功能暴露给渲染进程
+- 使用 contextBridge 可以安全地将 Node.js 功能暴露给渲染进程
 ```js
 // 主进程 (main.js)
 const { app, BrowserWindow } = require('electron');
@@ -231,7 +236,7 @@ contextBridge 模块用于安全地将 Node.js 功能暴露给渲染进程，允
 
 - 安装问题 切换网络翻墙
 - windows 鼠标拖放和事件是冲突的  使用js来控制
-- 避免阻塞主进程 使用web-work来处理计算
+- 避免阻塞主进程 使用 Web Worker 来处理计算
 - 二进制程序不能打包进 asar 中 只能copy过去 开发和生产环境，获取二进制程序路径方法是不一样的
 - 在 Windows 系统上，文件路径可能会出现问题，特别是长路径名的问题。asar 打包可以缓解这一问题
 

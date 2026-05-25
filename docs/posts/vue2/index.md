@@ -1,384 +1,379 @@
-# vue面试题汇总
+---
+title: Vue2 面试题
+description: Vue2 核心原理与高频面试题
+---
 
-## mvvm是什么？
+# Vue2 面试题
 
-1. view是视图层用来承载数据展示
-2. model是数据模型用来组织数据
-3. viewModule由前端框架的底层去实现，完成了数据和视图的互相映射和控制。
+## MVVM
 
-## 对vue的生命周期的理解
+- **View**：视图层，承载渲染
+- **Model**：数据模型
+- **ViewModel**：框架提供，完成 View ⇄ Model 双向映射
 
-vue中的实例创建=>销毁的过程流水线
-1. 创建
-2. 初始化
-3. 渲染
-4. 挂载
-5. 更新
-6. 卸载
+Vue 是 MVVM 的典型实现：通过响应式系统让 Model 变化驱动 View 更新，通过指令（v-model）让 View 变化驱动 Model 更新。
 
-包含：
-1. beforeCreate
-2. created
-3. beforeMount
-4. mounted
-5. beforeUpdate
-6. updated
-7. beforeDestroy
-8. destroyed
-9. activated
-10. deactivate
-11. errorCaptured
+## 生命周期
 
-```js
-const vue = new Vue() //创建空对象
-init(event,lifecycle) //初始化阶段
-// 执行init函数注入生命周期以及平台相关的事件处理方法（封装的dom操作函数）
-beforeCreate()
-reactive(data) //数据响应式
-// 往实例对象上挂载数据和方法
-created()
+| 钩子 | 时机 | 能做什么 |
+| --- | --- | --- |
+| beforeCreate | 实例初始化完，data/methods 未挂 | 几乎用不到 |
+| created | data / methods / computed 可用，DOM 未生成 | 请求数据、订阅事件 |
+| beforeMount | render 函数已生成 VNode，未挂到 DOM | 少用 |
+| mounted | DOM 挂载完成 | 操作 DOM、初始化第三方库 |
+| beforeUpdate | 数据变更，DOM 未更新 | 拿到更新前 DOM 状态 |
+| updated | DOM 更新完成 | 操作更新后 DOM（避免在此修改数据） |
+| beforeDestroy | 实例销毁前 | 清定时器、解绑事件、取消订阅 |
+| destroyed | 实例销毁后 | 几乎用不到 |
+| activated | keep-alive 缓存组件激活 | - |
+| deactivated | keep-alive 缓存组件失活 | - |
+| errorCaptured | 子孙组件抛错 | 错误兜底 |
 
-if (render){
-  render() // 生成虚拟dom以及数据的依赖收据
-}
-beforeMount()
-if (option.el) {
-  vue.$mount(option.el); // 挂载到 DOM，将虚拟 DOM 映射到真实 DOM 进行path挂载dom以及映射到Vnode的el上
-}
-mounted()
-// 修改数据
-beforeUpdate()
-// 数据响应式触发，Vnode重新render进行patch
-updated()
-// 离开页面失活
-beforeDestroy()
-// data methods 可用
-destroyed()
+父子组件加载顺序：
+
+```
+父 beforeCreate → 父 created → 父 beforeMount
+  → 子 beforeCreate → 子 created → 子 beforeMount → 子 mounted
+父 mounted
+
+更新：父 beforeUpdate → 子 beforeUpdate → 子 updated → 父 updated
+销毁：父 beforeDestroy → 子 beforeDestroy → 子 destroyed → 父 destroyed
 ```
 
-## vue双向数据绑定的实现
+## 响应式原理（核心）
 
-
-1. 数据的响应式初始化 observer
-2. 模版编译成的render函数执行触发依赖收集 dep watcher 
-3. 改动数据触发更新
-
-实现的类：
-1. Observer
-2. render
-3. Dep
-4. watcher
-5. update
+Vue2 用 `Object.defineProperty` 劫持每个属性的 get/set：
 
 ```js
-
-function defineReactive(obj,key,value){
+function defineReactive(obj, key, val) {
   const dep = new Dep();
-
+  observe(val);                       // 递归劫持
   Object.defineProperty(obj, key, {
     get() {
-      if (Dep.target) {
-        dep.addSub(Dep.target); // 收集依赖
-      }
-      return value;
+      if (Dep.target) dep.depend();   // 依赖收集
+      return val;
     },
-    set(newValue) {
-      if (value !== newValue) {
-        dep.notify(); // 通知所有订阅者更新
-      }
+    set(newVal) {
+      if (newVal === val) return;
+      observe(newVal);                 // 新值也要劫持
+      val = newVal;
+      dep.notify();                    // 通知更新
     }
-  });  
+  });
 }
 
-class Observer{
-  construtoctor(val){
-    this.val = val
-    this.walk(val)
-  }
-  
-  walk(obj){
-    obj.keys().forEach(key=>{
-      defineReactive(obj,key,obj[key])
-    })
-  }
-}
-
-function observer(data){
- new Observerr(data) 
-}
-
-function compiler(el){
-  const childNodes = el.childNodes
-  Array.from(childNodes).forEach((node)=>{
-    // 1.如果是插值 {{a}} 解析插值文本
-    // 2.如果是插值 {{a}} 解析插值文本
-    
-    if(node.childNodes&&node.childNodes.length){
-      compiler(node)
-    }
-  })
-}
-
-class Compiler{
-  construtoctor(el,vm){
-    this.$el = document.querySelector(el)
-    this.$vm = vm
-    
-    if(this.$el){
-      compiler(this.$el)
-    }
-  }
-}
-
-class Vue{
-  construtoctor(options){
-    this.$options = options
-    this.$data = options.data
-    
-    observer(this.$data) //响应式处理
-    
-    proxy(this) //代理到实例上
-    
-    new Compiler(options.el,this)
-  }
-}
-```
-## dep和watcher和update和render的关系
-
-- dep（依赖收集器）
-   dep 是依赖收集器，每个响应式数据属性都有一个对应的 dep 实例。它的作用是管理所有依赖于该属性的 watcher，并在数据变化时通知这些 watcher。
-   依赖收集：当组件渲染时，访问响应式数据会触发 getter，此时当前的 watcher 会被添加到 dep 的订阅者列表中。
-   通知更新：当数据变化时，setter 被触发，dep 会调用 notify 方法通知所有订阅者（watcher）进行更新。
-```js
 class Dep {
-  constructor() {
-    this.subs = []; // 存储所有依赖该属性的 Watcher
-  }
+  constructor() { this.subs = []; }
+  depend() { if (Dep.target) this.subs.push(Dep.target); }
+  notify() { this.subs.forEach(w => w.update()); }
+}
+Dep.target = null;
+```
 
-  addSub(watcher) {
-    this.subs.push(watcher);
-  }
+**Vue2 的三个缺陷**（面试高频）：
+1. **不能检测数组下标变化**：`arr[0] = x` 不触发更新 → Vue2 用 `arr.splice(0, 1, x)` 或重写 7 个数组方法（push/pop/shift/unshift/splice/sort/reverse）
+2. **不能检测新增/删除属性**：`obj.newKey = x` 不触发 → 用 `Vue.set` / `Vue.delete`
+3. **递归遍历性能**：初始化时深度递归，大对象有开销
 
-  notify() {
-    this.subs.forEach(watcher => watcher.update());
+## 依赖收集与派发更新
+
+四个角色：
+
+| 角色 | 职责 |
+| --- | --- |
+| Observer | 把 data 变响应式（执行 defineReactive） |
+| Dep | 一个属性一个 Dep，记录依赖它的 Watcher |
+| Watcher | 一个观察对象，渲染 / computed / user-watch 都有 |
+| Scheduler | 异步去重队列，下一个 tick 批量执行 Watcher.run |
+
+Watcher 类型：
+- **渲染 Watcher**：组件 mount 时创建，触发 render，每组件一个
+- **computed Watcher**：lazy 求值，dirty 标记
+- **user Watcher**：`vm.$watch` / `watch: {}`
+
+流程：
+
+```
+data 变 → setter 触发 dep.notify
+       → 通知所有订阅的 watcher.update
+       → 进入异步队列 queueWatcher
+       → nextTick 后批量执行 watcher.run
+       → 渲染 watcher 重新执行 render
+       → 生成新 VNode，diff，patch 到真实 DOM
+```
+
+## Vue2 模板编译
+
+```
+template
+  → parse（正则 + AST）
+  → optimize（标记静态节点，diff 跳过）
+  → generate（生成 render 函数字符串）
+  → new Function(...)
+```
+
+执行时调用 render → 返回 VNode → patch。
+
+## diff 算法
+
+**核心策略**：同层比较 + 双端比较 + key 复用。
+
+新旧 VNode 都用四指针（旧头/旧尾/新头/新尾）：
+
+```
+1. 旧头 = 新头：复用，指针右移
+2. 旧尾 = 新尾：复用，指针左移
+3. 旧头 = 新尾：旧头节点移到旧尾后面，旧头→右、新尾→左
+4. 旧尾 = 新头：旧尾节点移到旧头前面，旧尾→左、新头→右
+5. 都不匹配 → 查 key 映射表，找到则复用并移到旧头前，没找到则新建
+6. 任一端遍历完：剩余的批量新增 / 删除
+```
+
+`key` 的作用：让 Vue 准确判断"这是同一个节点的复用还是新节点"。不写 key 用 index 时，错位插入会引起大量 DOM 改动。
+
+## 虚拟 DOM 的意义
+
+1. **性能折中**：纯模板的精准更新更快，但 Vue 想兼容渲染逻辑（render 函数、JSX），VNode 是中间表示
+2. **跨平台**：同一份 VNode 可以渲染到 DOM / weex / 小程序 / canvas
+
+虚拟 DOM 不一定比直接操作 DOM 快，但能"在合理性能下提供更好的开发体验"。
+
+## nextTick 原理
+
+为什么需要：数据变化后异步更新 DOM，多次同步赋值只触发一次渲染。
+
+实现：把回调推进队列 → 微任务调度（降级链）。
+
+```js
+const callbacks = [];
+let pending = false;
+
+function nextTick(cb) {
+  callbacks.push(cb);
+  if (!pending) {
+    pending = true;
+    timer(() => {
+      const copy = callbacks.slice(0);
+      callbacks.length = 0;
+      pending = false;
+      copy.forEach(c => c());
+    });
+  }
+}
+
+// 降级链
+const timer = typeof Promise !== 'undefined'
+  ? cb => Promise.resolve().then(cb)
+  : typeof MutationObserver !== 'undefined'
+  ? cb => { /* MutationObserver 触发微任务 */ }
+  : typeof setImmediate !== 'undefined'
+  ? setImmediate
+  : setTimeout;
+```
+
+注意：Vue 数据更新的 watcher flush 也是用 nextTick，所以 `await nextTick()` 后 DOM 已更新。
+
+## 组件通信
+
+| 关系 | 方式 |
+| --- | --- |
+| 父 → 子 | props |
+| 子 → 父 | $emit |
+| 跨级（同父） | event bus（小项目）/ vuex |
+| 跨级（祖先 → 后代） | provide / inject |
+| 任意 | vuex / pinia |
+| 拿组件实例 | ref / $parent / $children |
+| 透传 | `$attrs` / `$listeners` |
+
+## v-if vs v-show
+
+- `v-if`：真正销毁/重建 DOM，惰性渲染，切换成本高
+- `v-show`：`display: none` 切换，初始化成本相同，切换便宜
+- 频繁切换用 v-show，少切换用 v-if
+
+## v-if vs v-for 优先级
+
+- **Vue2**：v-for **优先**于 v-if（v-if 在每次循环里都判断 → 性能差）
+- **Vue3**：v-if **优先**于 v-for（语义更合理）
+
+不要在同一元素上同时用，要么外包一层，要么 computed 过滤。
+
+## computed vs watch vs methods
+
+| 维度 | computed | watch | methods |
+| --- | --- | --- | --- |
+| 缓存 | 有，依赖不变不重算 | 无 | 无（每次重算） |
+| 异步 | 不能 | 能 | - |
+| 用途 | 依赖派生值 | 副作用响应（请求、保存） | 普通函数 |
+
+```js
+watch: {
+  query: {
+    handler(newV) { this.search(newV); },
+    immediate: true,        // 立即执行一次
+    deep: true              // 深度监听
   }
 }
 ```
-- watcher（观察者）
-   watcher 是观察者，负责订阅数据的变化，并在数据变化时执行更新操作。每个组件实例都有一个渲染 watcher，用于触发组件的重新渲染。
-   依赖收集：在组件渲染过程中，watcher 会访问响应式数据，触发 getter，从而将自己添加到 dep 的订阅者列表中。
-   更新操作：当 dep 通知 watcher 数据变化时，watcher 会调用 update 方法，触发组件的重新渲染
+
+## 自定义指令
+
 ```js
-class Watcher {
-  constructor(vm, renderFn) {
-    this.vm = vm;
-    this.renderFn = renderFn;
-    this.get(); // 触发依赖收集
-  }
+Vue.directive('focus', {
+  bind(el, binding, vnode) {},
+  inserted(el) { el.focus(); },
+  update() {},
+  componentUpdated() {},
+  unbind() {}
+});
 
-  get() {
-    Dep.target = this; // 当前活跃的 Watcher
-    this.renderFn(); // 触发 getter 收集依赖
-    Dep.target = null;
-  }
-
-  update() {
-    queueWatcher(this);
-  }
-
-  run() {
-    this.renderFn(); // 重新渲染组件
-  }
-}
+// 用法
+<input v-focus />
 ```
-- update（更新操作）
-  update 是 watcher 的一个方法，用于响应数据变化并触发视图更新。
-  当 dep 调用 notify 方法时，所有订阅的 watcher 的 update 方法会被触发。
-  update 方法会重新执行渲染函数，生成新的虚拟 DOM，并通过 patch 方法更新真实 DOM
-  Watcher 的 update 方法会将自己加入更新队列（queueWatcher），并在下一个事件循环中执行。
-```js
-function queueWatcher(watcher) {
-  if (!flushing) {
-    queue.push(watcher);
-  }
-  if (!waiting) {
-    nextTick(flushSchedulerQueue);
-  }
-}
 
-function flushSchedulerQueue() {
-  queue.forEach((watcher) => watcher.run());
-  queue = [];
-}
+应用：自动聚焦、防抖、长按、权限、复制。
+
+## 插槽 slot
+
+```html
+<!-- 子组件 -->
+<div>
+  <slot />                                <!-- 默认 -->
+  <slot name="header" />                  <!-- 具名 -->
+  <slot name="item" :data="row" />         <!-- 作用域 -->
+</div>
+
+<!-- 父组件 -->
+<Child>
+  <template #default>默认内容</template>
+  <template #header>头部</template>
+  <template #item="{ data }">{{ data.name }}</template>
+</Child>
 ```
-- render（渲染函数）
-render 是 Vue 的渲染函数，用于生成虚拟 DOM。它会在组件初始化和数据变化时被调用。
-初始化渲染：在组件挂载时，render 函数会生成虚拟 DOM，并通过 patch 方法将其渲染到真实 DOM。
-更新渲染：当数据变化时，watcher 的 update 方法会重新调用 render 函数，生成新的虚拟 DOM，并通过 patch 方法更新真实 DOM。
-```js
-function render() {
-  // 返回虚拟 DOM
-  return h('div', this.message);
-}
 
-new Vue({
-  data: { message: 'Hello Vue!' },
-  render
+作用域插槽用途：子组件控制结构，父组件控制内容（如 Table、List 等容器组件）。
+
+## mixin
+
+```js
+const mixin = {
+  data() { return { count: 0 }; },
+  methods: { inc() { this.count++; } }
+};
+export default { mixins: [mixin] };
+```
+
+问题：
+- 命名冲突
+- 隐式依赖（看不出方法来自哪个 mixin）
+- 多层嵌套难追踪
+
+→ Vue3 用 Composition API 解决。
+
+## keep-alive
+
+```html
+<keep-alive :include="['UserList']" :exclude="['Login']" :max="10">
+  <component :is="view" />
+</keep-alive>
+```
+
+特性：
+- 内部 LRU 缓存（max 控制）
+- 缓存的组件不卸载，触发 activated/deactivated 而不是 mounted/destroyed
+- 配合 router 路由缓存
+
+## 异步组件
+
+```js
+// 简单
+Vue.component('Async', () => import('./Async.vue'));
+
+// 完整配置（loading / error / timeout）
+const AsyncComp = () => ({
+  component: import('./Async.vue'),
+  loading: Loading,
+  error: ErrorComp,
+  delay: 200,
+  timeout: 3000
 });
 ```
 
-## dep和watcher和update和render的对应数据的关系
+## vue-router
 
-1. 一个属性对应一个dep
-2. 一个组件对应一个渲染watcher
+模式：
+- **hash**：`#/path`，靠 `hashchange` 事件，兼容性好
+- **history**：`/path`，靠 `pushState` / `popstate`，需要后端配合（所有路径返回 index.html）
 
-Watcher 主要分为以下几种类型：
-1. 渲染 Watcher：用于触发组件的重新渲染。
-2. 用户 Watcher：通过 vm.$watch 创建，用于监听特定数据的变化。
-3. 计算属性 Watcher：用于实现计算属性，监听依赖变化并重新计算。
-4. 指令 Watcher：用于实现指令的更新逻辑，监听指令绑定的表达式变化。
-5. 事件 Watcher：用于监听 DOM 事件或自定义事件。
+守卫：
+- 全局：`beforeEach`、`beforeResolve`、`afterEach`
+- 路由独享：`beforeEnter`
+- 组件内：`beforeRouteEnter`、`beforeRouteUpdate`、`beforeRouteLeave`
 
+懒加载：`component: () => import('./X.vue')`，配合 webpack magic comment 命名 chunk。
 
-## vue的虚拟dom的意义？
+动态路由：`path: '/user/:id'`，通过 `$route.params.id` 拿。
 
-1. 妥协性能
-2. 跨平台
+## vuex
 
+四件套：state / getters / mutations / actions / modules。
 
+- mutations：同步修改 state
+- actions：异步逻辑，最终 commit mutation
+- 严格模式（开发环境）：state 只能通过 mutation 修改
 
-## vue中组件的通信方式
+modules：
 
-1. props 父传子
-2. emit 子传父
-3. eventbus 事件总线
-4. vuex 状态管理
-5. provide/inject
-6. ref 获取组件实例
-7. $children
-8. $parent
-9. attrs/listener
+```js
+const moduleA = {
+  namespaced: true,
+  state: () => ({ x: 0 }),
+  mutations: { inc(state) { state.x++; } },
+  actions: { incAsync({ commit }) { setTimeout(() => commit('inc')); } }
+};
+new Vuex.Store({ modules: { a: moduleA } });
+// 用：this.$store.commit('a/inc')
+```
 
-## Vue 2 的 Diff 算法及其对比过程
-Vue 2 的 Diff 算法是虚拟 DOM 更新机制的核心，它用于比较新旧虚拟 DOM 树的差异，并将这些差异高效地应用到真实 DOM 上。Vue 2 的 Diff 算法主要基于 同层级比较 的策略，避免了跨层级的复杂比较，从而在性能和复杂度之间取得了平衡。
+## Vue2 性能优化
 
-- 同层级比较：Vue 2 的 Diff 算法只在当前层级的子节点之间进行比较，而不是深入到子节点的子节点中。这种策略大大减少了比较的复杂度。
-- 优化更新：通过 key 属性快速定位节点，减少不必要的 DOM 操作。
-- 对比的策略：虚拟 DOM 对比的具体流程
-1. 优先比较 tag
-   在进行虚拟 DOM 对比时，Vue 2 首先会比较新旧虚拟 DOM 节点的 tag 属性：
-   如果 tag 不同，说明新旧节点类型不同，Vue 会直接替换整个节点。
-   如果 tag 相同，说明节点类型相同，Vue 会继续进行下一步比较。
-2. 比较 key
-   在 tag 相同的情况下，Vue 会进一步比较节点的 key 属性：
-   如果 key 不同，Vue 会认为这两个节点是不同的虚拟节点，直接替换旧节点。
-   如果 key 相同，Vue 会认为这两个节点是同一个虚拟节点，继续进行更详细的比较。
-3. 比较节点的其他属性
-   对于 tag 和 key 都相同的节点，Vue 会进一步比较节点的其他属性（如 props、data 等）：
-   如果属性有变化，Vue 会更新真实 DOM 的对应属性。
-   如果属性没有变化，Vue 会跳过该节点，不进行任何操作。
-4. 比较子节点
-   如果新旧节点都有子节点，Vue 会递归地对子节点进行对比：
-   使用双端比较算法（从头尾两端开始比较），减少不必要的比较。
-   如果子节点的 tag 和 key 相同，Vue 会递归比较子节点的子节点。
-   如果子节点的 tag 或 key 不同，Vue 会根据具体情况创建新节点、移动旧节点或删除旧节点。
-   一对多、多对一、多对多的对比情况
-   一对多
-   当一个旧节点对应多个新节点时（例如，旧节点被拆分为多个新节点），Vue 会根据 key 来确定哪些新节点是新增的，哪些是复用的。
-   多对一
-   当多个旧节点对应一个新节点时（例如，多个旧节点被合并为一个新节点），Vue 会根据 key 来确定哪些旧节点可以被复用，哪些需要被删除。
-   多对多
-   当多个旧节点对应多个新节点时，Vue 会通过双端比较算法和 key 来确定哪些节点可以被复用，哪些需要被移动、新增或删除。
-   - 设置指针：
-     设置两个指针，分别指向新旧子节点的头部和尾部。
-   - 四种双端比较策略：
-     旧头对新头：如果新旧节点的头部节点相同，复用该节点并继续向右移动。
-     旧尾对新尾：如果新旧节点的尾部节点相同，复用该节点并继续向左移动。
-     旧头对新尾：如果旧头部节点与新尾部节点相同，将该节点移动到尾部。
-     旧尾对新头：如果旧尾部节点与新头部节点相同，将该节点移动到头部。
-    
-**vue是边对比边更新dom**，在找出虚拟 DOM 的差异后，Vue 会将这些差异应用到真实 DOM 上。这包括创建新节点、更新节点属性、移动或删除节点等操作。
+1. 长列表 `Object.freeze` 跳过响应式
+2. 异步组件 + 路由懒加载
+3. keep-alive 缓存
+4. v-show 替代频繁切换
+5. computed 缓存替代 methods
+6. 函数式组件（无状态）
+7. SSR / 预渲染
+8. `v-for` 必带 key
 
+## Vue 2 与 Vue 3 差异
 
-## 关于nextTick的认识？
-- Vue 的异步更新机制当数据变化时，Vue 不会立即更新 DOM，而是将需要更新的 Watcher 推入一个队列（queue），并在下一个事件循环的微任务阶段统一执行这些更新。这是为了合并多次数据变动，避免不必要的重复渲染。
+1. **响应式**：defineProperty → Proxy
+   - 数组下标、新增删除属性都能监听
+   - 不再需要递归劫持，按需触发
+2. **API 设计**：Options API → Composition API
+   - 业务聚合（按功能而非按选项组织）
+   - 更好的 TS 支持
+   - 更好的 tree-shaking
+3. **diff**：双端比较 → 双端 + 最长递增子序列
+4. **模板编译优化**：
+   - 静态提升（hoistStatic）
+   - 动态节点打标（PatchFlag）
+   - 事件缓存（cacheHandlers）
+5. **v-model**：自定义事件名变化，可绑多个
+6. **Fragment / Teleport / Suspense** 新增
+7. **生命周期**：beforeDestroy → beforeUnmount，destroyed → unmounted；setup 替代 beforeCreate/created
+8. **多根节点**：组件可以有多个根
+9. **TS 重写**
 
-流程总结：
-数据变更：例如修改 this.data。
+## Composition API 优势
 
-触发 Watcher 更新：将需要更新的 Watcher 推入队列。
+1. 解决 mixin 混乱
+2. 业务逻辑按功能聚合
+3. 更好的 TS 推导
+4. 更好的 tree-shaking（API 都是 named export）
+5. 更好的复用（自定义 hook / composable）
 
-调度更新：通过 nextTick 将队列中的 Watcher 更新包装为微任务。
-
-执行更新：在微任务阶段执行队列中的 Watcher，更新 DOM。
-
-- nextTick 的实现原理 nextTick 允许你在 DOM 更新完成后执行回调。它的核心逻辑是：
-
-将回调函数推入一个队列（callbacks）。
-
-通过微任务（优先使用 Promise.then，降级到 setImmediate 或 setTimeout）异步执行队列中的回调。
-
-关键点：
-DOM 更新和 nextTick 共享同一个微任务队列。
-
-Vue 确保 DOM 更新的微任务先于 nextTick 的回调执行：
-1. 触发数据更新内部调用nextTick把watcher放入微任务队列
-2. 调用用户到的nextTick把回调函数放入微任务队列
-3. 不能调换顺序
-
-## vue的模版编译原理
-
-1. parser 对源代码进行字符串的替换生成ast
-2. format 对ast进行转换同时进行打标签标记tag方便diff
-3. generate 对ast进行生产render函数的字符串
-
-## 关于keep-alive的理解
-
-
-
-## v-if和v-for的优先级
-
-- vue2 v-for>v-if
-- vue3 v-for<v-if
-
-## template和jsx的区别
-
-1. 灵活性 jsx 可以实现更为复杂的组件
-2. 解耦性 template 在编译阶段做更多的事情
-
-
-## vue2和vue3的区别
-
-1. 响应式的重构 defineProperty=>proxy
-   - 原生监听数组方法
-   - 按需进行依赖收集
-   - 不需要递归遍历属性
-   - 不用遍历每一个属性劫持
-2. API设计 函数式编程
-   - 实现tree-shaking
-   - 第三方集成响应式方便扩展
-3. diff算法 
-   - vue2 双端比较 首首=>尾尾=>首尾=>尾首
-   - vue3 最长递增子序列 首首=>尾尾=>最长子序列=>遍历循环当前节点不在序列里面 需要移动 这样可以确定最少的dom操作
-   - 构建新节点的映射关系和老节点对比 多了删除 少了新增 节点出现交叉 执行最长递增子序列
-4. 模版编译
-   - 静态提升 将静态节点提取为常量，避免重复创建
-   - 标记动态 虚拟DOM节点添加标记（如TEXT、CLASS），仅对比动态内容，减少全量Diff计算
-   - 事件缓存 在编译过程中，Vue 会将事件处理函数缓存起来，在每次渲染时直接使用缓存的事件处理函数，而不需要重新创建，减少了内存占用和渲染时间
-5. v-module的事件监听和传值改变
-6. 生命周期 setup()替代beforeCreate和created，成为组合式API入口
-7. 通过setup()函数聚合逻辑，支持按功能模块组织代码，提升复用性和可维护性。
-
-Composition API与React Hooks的区别？
-- Composition API的setup()仅执行一次，依赖自动追踪；React Hooks每次渲染都执行，需手动管理依赖项（如useMemo）
-
-## composition的好处
-
-1. 解决混入混乱问题
-2. 更好的支持ts
-3. 更好的tree-shaking
-4. 业务功能更加的聚合
-5. 更好到的第三方的扩展
-
-
-
+vs React Hooks：
+- Vue 的 setup 只执行一次，依赖通过响应式自动追踪
+- React Hooks 每次渲染都重新执行，依赖通过数组手动声明

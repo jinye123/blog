@@ -1,305 +1,562 @@
-# js基础面试题
+---
+title: JavaScript 基础
+description: JS 高频面试题与深度解读
+---
 
-## 实现unshift
+# JavaScript 基础
+
+## 数据类型
+
+8 种：`undefined / null / boolean / number / string / symbol / bigint` + `object`。
+
+判断方式：
 
 ```js
-Array.prototype.Myunshift = function (){
-  const arr = Array.from(arguments).reverse()
-  for (item of arr){
-    this.splice(0,0,item)
-  }
-  return this.length
+typeof undefined  // 'undefined'
+typeof null       // 'object'  ← 历史 bug
+typeof []         // 'object'
+typeof (()=>{})   // 'function'
+[] instanceof Array  // true
+Object.prototype.toString.call(null)  // '[object Null]'
+```
+
+`Object.prototype.toString.call(x)` 是最准确的类型判断，因为内部 `[[Class]]` 属性不会被改写。
+
+## == 与 === 区别
+
+`===` 类型不同直接 false；`==` 触发类型转换。
+
+七条规则（简化版）：
+
+1. 类型相同 → 走 `===`
+2. `null == undefined` → true（其它对比都是 false）
+3. 数字与字符串 → 字符串转数字
+4. boolean → 转数字（true=1, false=0）
+5. 对象与基本类型 → 对象先 `ToPrimitive`（先 valueOf，失败再 toString）
+
+经典面试题：
+
+```js
+[] == ![]     // true
+// 步骤：![] = false → [] == false → [] == 0 → '' == 0 → 0 == 0
+[] == 0       // true（[] → '' → 0）
+null == 0     // false（null 只与 undefined 相等）
+NaN == NaN    // false（NaN 不等于任何东西）
+```
+
+## valueOf 与 toString
+
+引用类型转**字符串**时：先 `toString`，失败再 `valueOf`。
+引用类型转**数字**时：先 `valueOf`，失败再 `toString`。
+
+```js
+const obj = {
+  valueOf() { return 1; },
+  toString() { return 'hello'; }
+};
+String(obj)   // 'hello'  字符串场景
+Number(obj)   // 1        数字场景
+obj + ''      // '1'      + 是数学优先，先 valueOf
+obj + 'x'     // '1x'
+`${obj}`      // 'hello'  模板字符串走 toString
+```
+
+## 类型转换
+
+```js
+// 转字符串
+String(123)       // '123'
+String(null)      // 'null'
+String([1,2])     // '1,2'
+
+// 转数字
+Number('')        // 0
+Number(' 123 ')   // 123
+Number('123abc')  // NaN
+Number(null)      // 0
+Number(undefined) // NaN
+Number(true)      // 1
+Number([])        // 0
+Number([1])       // 1
+Number([1,2])     // NaN
+Number({})        // NaN
+
+// 转布尔
+Boolean(0)         // false
+Boolean('')        // false
+Boolean(null)      // false
+Boolean(undefined) // false
+Boolean(NaN)       // false
+// 其它都是 true，包括 '0'、[]、{} 都是 true
+```
+
+## 闭包
+
+定义：函数 + 其能访问的词法环境的引用。当内部函数被外部引用时，外部函数的作用域不会被销毁。
+
+经典面试题：循环 + setTimeout
+
+```js
+// 打印 3 个 3
+for (var i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 0);
+}
+
+// 修复 1：let（块作用域，每次循环新建 i）
+for (let i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 0);
+}
+
+// 修复 2：IIFE 创建闭包
+for (var i = 0; i < 3; i++) {
+  (function(j) {
+    setTimeout(() => console.log(j), 0);
+  })(i);
 }
 ```
 
-## 数组去重
+应用场景：
+- 模块封装（私有变量）
+- 防抖节流（保留 timer）
+- currying / 偏函数
+- React 函数组件中的 useState
+
+副作用：
+- 内存泄漏（被引用的作用域无法回收）
+- 滥用可读性差
+
+## 原型与原型链
+
+```
+function Foo() {}
+const f = new Foo();
+
+f.__proto__ === Foo.prototype                    // true
+Foo.prototype.__proto__ === Object.prototype     // true
+Object.prototype.__proto__ === null              // true
+Foo.__proto__ === Function.prototype             // true（函数也是对象）
+Function.prototype.__proto__ === Object.prototype // true
+```
+
+查找规则：访问属性时沿 `__proto__` 链向上找，找不到返回 `undefined`。
+
+继承方式（演进史）：
+1. 原型链继承：共享引用类型属性
+2. 借用构造函数：解决共享，但无法继承原型方法
+3. 组合继承：调用两次父构造
+4. **寄生组合继承**（最优）：
 
 ```js
-Array.prototype.unique = function (){
-  // 1
-  return Array.from(new Set(this))
-  // 2
-  const arr = []
-  for (item of this){
-    if (!arr.includes(item)){
-      arr.push(item)
-    }
-  }
-  return arr
+function inherit(Child, Parent) {
+  Child.prototype = Object.create(Parent.prototype);
+  Child.prototype.constructor = Child;
+}
+
+function Parent(name) { this.name = name; }
+Parent.prototype.say = function() { console.log(this.name); };
+
+function Child(name, age) {
+  Parent.call(this, name);   // 借用构造
+  this.age = age;
+}
+inherit(Child, Parent);
+```
+
+ES6 `class extends` 等价于寄生组合继承。
+
+## this 指向
+
+5 种绑定（优先级从高到低）：
+
+1. **`new` 绑定**：`new Foo()` → this 指向新对象
+2. **显式绑定**：`fn.call(obj)` / `fn.apply(obj)` / `fn.bind(obj)`
+3. **隐式绑定**：`obj.fn()` → this 指向 obj
+4. **默认绑定**：独立调用 → 严格模式 undefined，非严格 window
+5. **箭头函数**：没有自己的 this，捕获定义时所在作用域的 this
+
+```js
+const obj = {
+  name: 'obj',
+  foo() { return this.name; },
+  bar: () => this.name,    // 箭头：this 是外层（模块/window）
+};
+obj.foo();              // 'obj'
+const f = obj.foo;
+f();                    // undefined（严格模式）
+
+// 面试题：bind 多次以第一次为准
+function fn() { return this.x; }
+const b1 = fn.bind({ x: 1 });
+const b2 = b1.bind({ x: 2 });
+b2();                   // 1
+```
+
+## new 的本质
+
+```js
+function myNew(Constructor, ...args) {
+  // 1. 创建空对象，原型指向构造函数 prototype
+  const obj = Object.create(Constructor.prototype);
+  // 2. 执行构造函数，this 绑定到新对象
+  const result = Constructor.apply(obj, args);
+  // 3. 如果构造函数显式返回对象，则用之；否则用新对象
+  return (result !== null && typeof result === 'object') ? result : obj;
 }
 ```
 
-## 指定范围内随机数
+追问：箭头函数为什么不能 new？
+- 箭头函数没有 `[[Construct]]` 内部方法
+- 没有自己的 this、prototype
+- 调用 new 抛 TypeError
+
+## 事件循环
+
+浏览器：
+
+```
+主线程 → 同步代码
+     → 微任务队列（Promise.then / MutationObserver / queueMicrotask）
+     → 宏任务（setTimeout / setInterval / setImmediate(node) / I/O / UI render / postMessage）
+
+每跑完一个宏任务，清空所有微任务。然后浏览器决定是否重新渲染。
+```
+
+经典输出题：
 
 ```js
-function fn(min,max){
-  // (min,max)
-  return Math.round(Math.random() * (max - min - 2) + min + 1)
-  // [min,max]
-  return Math.round(Math.random() * (max - min) + min)
-  // (min,max]
-  return Math.ceil(Math.random() * (max - min) + min)
-  // [min,max)
-  return Math.floor(Math.random() * (max - min) + min)
+console.log('1');
+setTimeout(() => console.log('2'), 0);
+Promise.resolve().then(() => {
+  console.log('3');
+  return Promise.resolve();
+}).then(() => console.log('4'));
+console.log('5');
+
+// 输出：1 5 3 4 2
+```
+
+`async/await` 转 Promise：
+
+```js
+async function a() {
+  console.log('A1');
+  await b();
+  console.log('A2');     // 等价于 b().then(() => console.log('A2'))
+}
+async function b() {
+  console.log('B1');
+}
+a();
+console.log('main');
+// A1 B1 main A2
+```
+
+Node 与浏览器差异：
+- Node 11 之前：每个阶段执行完才清微任务；之后每个宏任务后清
+- Node 有独立阶段（timers / pending / idle / poll / check / close），setImmediate vs setTimeout 顺序在 I/O 回调里可预测
+
+## Promise
+
+状态：`pending / fulfilled / rejected`，**状态不可逆**。
+
+| API | 行为 |
+| --- | --- |
+| `Promise.all` | 全部成功才成功，任一失败即失败 |
+| `Promise.race` | 第一个 settle 的胜出（不论成功失败） |
+| `Promise.any` | 任一成功即成功，全部失败才失败（AggregateError） |
+| `Promise.allSettled` | 等全部 settle，返回结果数组（不会 reject） |
+
+链式返回值规则：
+- `then` 回调返回普通值 → 下个 then 接收
+- 返回 Promise → 下个 then 等其 settle
+- 抛错 → 下个 catch 捕获
+- 没传 onRejected → 错误向下传播
+
+## async/await
+
+本质：Generator + 自动执行器（co 库的思路）。
+
+```js
+// async/await
+async function load() {
+  const a = await fetchA();
+  const b = await fetchB(a);
+  return b;
+}
+
+// 等价（简化）
+function load() {
+  return fetchA().then(a => fetchB(a));
 }
 ```
 
-## 100以内的质数
+错误处理：
 
 ```js
-// (只能被1和自身整除)
-
-
-```
-
-
-## 提取url的参数
-
-```js
-function quereyParrams(url){
-  const params = url.split('?')[1]
-  const urlSearchParams= new URLSearchParams(params)
-  // const parms = urlSearchParams.values()
-  const parms = Object.fromEntries(urlSearchParams.entries())
-  return params
-}
-
-```
-
-## 数组的随机排序
-
-```js
-const arr = [1,2,3,4,5,6,7,8,9]
-function rundomIndex(){
-  for (let i=0;i<arr.length;i++){
-    const index = parseInt(Math.random() * arr.length)
-    const curNum = arr[i]
-    arr[i] = arr[index]
-    arr[index] = curNum
-  }
+try {
+  const data = await fetch();
+} catch (err) {
+  // 等价于 .catch
 }
 ```
 
-## 手动实现数组的flat
+并行优化：
 
 ```js
-function flat(arr){
-  // 1
-  while (arr.some((v)=>Array.isArray(v))){
-    arr = [].concat(...arr)
-  }
-  return arr
-  // 2
-  return [].concat(...arr.map(item=>Array.isArray(item)?flat(item):''))
-}
+// 错：串行 6s
+const a = await taskA();  // 3s
+const b = await taskB();  // 3s
+
+// 对：并行 3s
+const [a, b] = await Promise.all([taskA(), taskB()]);
 ```
 
-## 两数之和
+## 模块化（CJS vs ESM）
+
+| 维度 | CommonJS | ESM |
+| --- | --- | --- |
+| 语法 | `require` / `module.exports` | `import` / `export` |
+| 加载 | 运行时 | 编译时（静态分析） |
+| 输出 | 值的**拷贝** | 值的**引用**（live binding） |
+| 循环引用 | 拿到的是模块当前已执行部分 | 通过引用，更新可被感知 |
+| 同步异步 | 同步 | 异步（顶层 await） |
+| tree-shaking | 不支持 | 支持（静态分析） |
+| this | module.exports | undefined |
+| Node 支持 | 默认 | `.mjs` 或 `"type":"module"` |
+
+CJS 拷贝示例：
 
 ```js
-const nums = [2,7,9,11] 
-const target = 9
+// a.js
+let count = 1;
+setTimeout(() => count++, 100);
+module.exports = { count };
 
-function fn(){
-  for (let i=0;i<nums.length;i++){
-    const index = nums.indexOf(target-nums[i])
-    
-    if(index>=0 && index!==i){
-      return [i,index]
-    }
-  }
-}
+// b.js
+const { count } = require('./a');
+setTimeout(() => console.log(count), 200);  // 1（拷贝快照）
 ```
 
-## 在a，b请求之后请求c
+ESM 引用示例：
 
 ```js
-const arr = []
-function fn(data){
-  arr.push(data)
-  if(arr.length===2){
-    console.log(3)
-  }
-}
+// a.js
+export let count = 1;
+setTimeout(() => count++, 100);
 
-function a(){
-  fn(1)
-}
-function b(){
-  fn(2)
-}
+// b.js
+import { count } from './a.js';
+setTimeout(() => console.log(count), 200);  // 2
 ```
 
+## 垃圾回收
 
-## 微应用怎么实现js和css的隔离
+V8 分代回收：
 
-1. css隔离
-   - css-module
-   - 命名空间
-2. js隔离
-   - 沙箱 浏览器with window.proxy node vm模块
+**新生代（Scavenge）**
+- 内存小（几 MB），分 from / to 两块
+- 存活对象从 from 复制到 to，交换角色
+- 多次存活 → 晋升到老生代
 
-## cjs和ems的区别
+**老生代（Mark-Sweep + Mark-Compact）**
+- Mark-Sweep：标记可达对象，清除其他
+- Mark-Compact：标记 + 整理，消除内存碎片
+- 增量标记 + 并发标记，减少卡顿
 
-1. cjs是运行时加载 ems是编译时静态
-2. cjs的require同步加载 ems的import异步加载
-3. cjs是浅拷贝 ems是只读不改变值
+GC Root：window / 调用栈 / 闭包引用等。
 
+常见内存泄漏：
+1. 意外的全局变量（`x = 1` 没 var/let）
+2. 未清除的定时器与回调
+3. 闭包持有大对象
+4. 已脱离 DOM 的引用（detached DOM）
+5. EventListener 没移除
+6. `console.log` 持有引用（生产环境删掉）
 
-## 函数深拷贝
+## 防抖与节流
 
-```js
-function deepColne(obj){
-  if(typeof obj === null || typeof obj !=='object'){
-    return obj
-  }
-  
-  if(Array.isArray(obj)){
-    return obj.map(item=>deepColne(item))
-  }
-  
-  const clone = {}
-  for (key in obj){
-    if(obj.hasOwnProperty(key)){
-      clone[key] = deepColne(obj[key])
-    }
-  }
-  
-  return clone
-}
-```
-
-
-## js延迟加载的方式
-页面加载完之后再加载js，有助于提高页面的加载速度。
-1. defer属性 文档解析完成 同步加载 最后执行 按顺序执行
-2. async属性 文档解析未完 异步加载 立即执行 不按照顺序
-3. 动态创建script引入js监听dom加载完成
-4. js放在body元素的最后去加载
-
-## 异步机制有哪些
-
-1. 回调函数 多层嵌套，回调地狱不利于维护
-2. promise 链式调用，予以不明确
-3. generator 同步方式调用 书写繁琐
-4. async/await generator的语法糖 有自动执行机制 遇到await 等到promise变成resolve
-
-## 如何理解pnpm
-
-pnpm的本质还是一个包管理器
-
-优势：
-1. 安装速度 因为已经安装过
-2. 磁盘空间利用  引用软连接
-3. 嵌套依赖 拍平
-
-## 函数式编程的理解
-
-编程范式：
-1. 函数式
-2. 命名式
-3. 声明式
-
-优点：
-- 更好的状态管理 因为没有状态
-- 更简单的复用 固定的输入/输出 无副作用对外部的影响
-- 更优雅的组合
-- 提高维护性
-
-缺点：
-- 过度包装 上下文切换的性能问题
-- 资源占用 闭包等对垃圾回收增大压力
-- 递归陷阱
-
-## js的编译器原理
-
-1. 原始code 
-2. lexer 词法分析 进行字符串解析tokens数组
-3. parser 语法分析 tokens集合语义遍历生成树形ast
-4. analyzed 语义分析 把ast转换为特定语言的 语义ast
-5. generator 生产code 把ast转换为可执行的 byte code字节码
-
-
-## 垃圾回收与内存泄漏
-
-1. 引用计数 内存中所有的对象是否存在引用
-   - 有引用 不清除
-   - 无引用 清除
-   - 缺点 a和b互相引用 但同时又不被使用 无法清除
-2. 标记清除 通过GC root 标记空间中的活动对象和非活动对象
-   - 如果 GC root可以遍历到 那说明是活动对象
-   - 如果 GC root不可以遍历到 说明是非活动对象
-   - 在根节点往下一层层便利去索引 window、dom等根节点
-   - 同时区别分类到新生代 老生代内存管理
-   - 新生代 使用区 空闲区 使用区满的时候 遍历哪些继续使用转到老生代 不使用的清除 同时调换使用区空闲区
-   - 开启辅助的线程去处理标记
-
-堆内存：
-1. 新生代
-   - from-space
-   - to-space
-   - from和to糊掉位置扫描其中的变量不可使用的就清除掉，如果转移多次的就代表需要转去老生代
-2. 老生代
-   - 标记清除算法 赠礼内存空间变得连续
-
-## 造成内存泄漏有哪些
-- 全局的变量
-- 闭包的使用
-- 重复绑定监听函数
-
-## valueOf和toString的区别
-
-1. toString把一个引用类型的值转换为字符串的形式表示
-2. valueOf把一个引用类型转换为原始类型（基础类型）
-
-引用类型转换为字符串执行顺序：
- - 优先调用toString，返回原始类型转换为字符串
- - 调用valueOf返回原始类型转换为字符串
- - 报错
-
-引用类型转换为数字执行顺序：
-- 优先调用toString，返回原始类型转换为字符串
-- 调用valueOf返回原始类型转换为字符串
-- 报错
-
-## js的防抖
-在n秒内重复触发会重新计时，例如输入框
+**防抖**：在 n 秒内重复触发会**重新计时**，最后一次触发后 n 秒才执行。
+**节流**：在 n 秒内只执行一次。
 
 ```js
-function fn(cb,time){
+// 防抖
+function debounce(fn, delay) {
   let timer = null;
-  return function (...args){
-     clearTimeout(timer)
-     timer = setTimeout(()=>{
-       cb.apply(this,args)
-     },time)
-  }
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+// 节流
+function throttle(fn, delay) {
+  let last = 0;
+  return function (...args) {
+    const now = Date.now();
+    if (now - last >= delay) {
+      last = now;
+      fn.apply(this, args);
+    }
+  };
+}
+
+// 节流 - 定时器版（首次立即 + 末次保证）
+function throttle(fn, delay) {
+  let timer = null;
+  return function (...args) {
+    if (timer) return;
+    timer = setTimeout(() => {
+      fn.apply(this, args);
+      timer = null;
+    }, delay);
+  };
 }
 ```
 
-## js的节流
-在n秒内重复触发会以第一次为主，如拖拽
+应用：
+- 防抖：搜索框输入、resize、表单校验
+- 节流：滚动、拖拽、鼠标移动
+
+## 异步演进
 
 ```js
-function fn(cb,time){
-  let timer = null;
-  return function (...args){
-    if(!timer){
-       cb.apply(this,args)
-       timer = setTimeout(()=>{
-          timer = null
-       },time)
-    }
-  }
+// 1. 回调（回调地狱）
+loadA(a => loadB(a, b => loadC(b, c => done(c))));
+
+// 2. Promise（链式）
+loadA().then(loadB).then(loadC).then(done);
+
+// 3. Generator（手动迭代）
+function* gen() {
+  const a = yield loadA();
+  const b = yield loadB(a);
+  return b;
+}
+
+// 4. async/await（同步写法）
+async function flow() {
+  const a = await loadA();
+  const b = await loadB(a);
+  return b;
 }
 ```
 
-## 前端SSR服务的理解
-1.采用Node.is部署前端SSR服务。
-2.浏览器请求 URL，前端SSR服务接收到请求后，根据不同 url，前端SSR服务向后端服务请求数据。
-3.请求完成后，前端SSR服务会组装一个携带了具体数据的HTML，并返回给浏览器。
-4.浏览器得到HTML后开始渲染页面，同时浏览器加载并执行is，给页面元素绑定事件，让页面变得可交
-当用户与浏览器页面进行交互(如点击分页器下一页)时，浏览器会执行，向后端服务请求数据获取完数据后，再次执行is，动态渲染页面。
-若跳转到新的页面，则重复从SSR服务获取HTML的过程。
-简单来说:初始化页面使用Node.is的SSR服务，后续交互都是通过执行s来更新页面。。优势:首屏的用户体验良好，友好支持SEO。
-劣势:运维麻烦，兼容节点和浏览器两端，代码复杂度增加。
+## 深拷贝
+
+```js
+function deepClone(value, weakMap = new WeakMap()) {
+  if (value === null || typeof value !== 'object') return value;
+  if (weakMap.has(value)) return weakMap.get(value);       // 循环引用
+
+  if (value instanceof Date) return new Date(value);
+  if (value instanceof RegExp) return new RegExp(value);
+  if (value instanceof Map) {
+    const m = new Map();
+    weakMap.set(value, m);
+    value.forEach((v, k) => m.set(deepClone(k, weakMap), deepClone(v, weakMap)));
+    return m;
+  }
+  if (value instanceof Set) {
+    const s = new Set();
+    weakMap.set(value, s);
+    value.forEach(v => s.add(deepClone(v, weakMap)));
+    return s;
+  }
+
+  const clone = Array.isArray(value) ? [] : {};
+  weakMap.set(value, clone);
+  Reflect.ownKeys(value).forEach(key => {
+    clone[key] = deepClone(value[key], weakMap);
+  });
+  return clone;
+}
+```
+
+现代浏览器原生：`structuredClone(value)`，支持循环引用、Map/Set/Date 等，但不能拷贝函数和 DOM。
+
+## SSR / CSR / SSG / ISR
+
+| 模式 | 渲染时机 | 优点 | 缺点 |
+| --- | --- | --- | --- |
+| CSR | 客户端 | 交互快、服务器压力小 | 首屏慢、SEO 差 |
+| SSR | 服务器每次请求 | 首屏快、SEO 好 | 服务器压力、TTFB 高 |
+| SSG | 构建时 | 极快、CDN 部署 | 数据变了要重新构建 |
+| ISR | 构建 + 按需重生 | 兼具 SSG 速度和动态 | 复杂度上升 |
+
+SSR 流程：
+
+```
+浏览器请求 → Node 服务执行组件 → 拼接 HTML → 返回浏览器
+浏览器解析 HTML（已有内容）→ 下载 JS → hydration（事件绑定）→ 后续走 CSR
+```
+
+挑战：
+- 两端环境差异（window 不存在）
+- hydration 错配（注意 SSR 与 CSR 产物一致）
+- 数据预取（getServerSideProps / asyncData）
+- 流式渲染（Streaming SSR）
+
+## 微前端的 CSS / JS 隔离
+
+CSS：
+- CSS Modules / scoped
+- 命名空间前缀
+- Shadow DOM（wujie、micro-app）
+
+JS：
+- 快照沙箱（保存恢复 window，单实例）
+- Proxy 沙箱（每个子应用一个 proxy window，多实例）
+- iframe 沙箱（最彻底）
+- Node 端用 `vm` 模块
+
+## valueOf / toString 总结题
+
+```js
+const obj = {
+  i: 1,
+  valueOf() { return this.i++; }
+};
+obj == 1 && obj == 2 && obj == 3   // true！
+```
+
+实现思路：`==` 触发 ToPrimitive，每次调用 valueOf 返回不同值。
+
+## pnpm 为什么快
+
+1. **硬链接 + 软链接结构**：所有包存全局 store，项目里只是硬链接，省磁盘
+2. **严格依赖**：解决幽灵依赖（npm 扁平化的副作用）
+3. **并行下载**
+4. **依赖图缓存**
+
+## 函数式编程
+
+特征：
+- 一等公民（函数当参数和返回值）
+- 纯函数（无副作用、相同输入相同输出）
+- 不可变数据
+- 高阶函数（map/filter/reduce/compose）
+- 柯里化、偏函数
+
+收益：
+- 易测试（无副作用）
+- 易组合（compose / pipe）
+- 易并发（无共享状态）
+
+代价：
+- 性能（不可变数据要新建）
+- 学习成本（curry / monad）
+
+## JS 编译流程
+
+```
+源码 → 词法分析（lexer）→ token 流
+     → 语法分析（parser）→ AST
+     → 解释执行 / 字节码生成（Ignition）
+     → JIT 优化（TurboFan）→ 机器码
+```
+
+V8 关键点：
+- Ignition 解释器：直接执行字节码
+- TurboFan 优化编译器：热点代码转机器码
+- 隐藏类（Hidden Class）：对象属性形状缓存
+- 内联缓存（IC）：加速属性访问
